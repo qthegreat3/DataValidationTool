@@ -77,6 +77,7 @@ namespace DataValidationApp
 
         private void onValidateFunctionalityBtnClick(object sender, EventArgs e)
         {
+            String merchantIdToValidate = merchantToCheck.Text;
             //If Print Boca Checked
             if (checkBox1.Checked)
             {
@@ -95,7 +96,7 @@ namespace DataValidationApp
 
                 results.Close();
 
-                String sqlToFindAppConfigs = "select ac.merchant_id, m.display_name, ac.name, ac.value from application_config ac join merchant m on ac.merchant_id = m.merchant_id where ac.application_id = @param_val_1 and ac.name = 'sendTicketsToBoca' and ac.value = 'true'";
+                String sqlToFindAppConfigs = "select ac.name, ac.value from application_config ac join merchant m on ac.merchant_id = m.merchant_id where ac.application_id = @param_val_1 and ac.merchant_id = @param_val_2 and ac.name = 'sendTicketsToBoca' and ac.value = 'true'";
                 //String sqlToFindAppConfigs = "select ac.merchant_id, m.display_name, ac.name, ac.value from application_config ac join merchant m on ac.merchant_id = m.merchant_id where ac.application_id = @param_val_1 and ac.name in ('sendTicketsToBoca','groupItemPrinting')";
 
                 bool anyBadResults = false;
@@ -104,31 +105,33 @@ namespace DataValidationApp
                 {
                     MySqlCommand cmdForAppConfigs = new MySqlCommand(sqlToFindAppConfigs, connection);
                     cmdForAppConfigs.Parameters.AddWithValue("@param_val_1", posApplicationIds[index]);
+                    cmdForAppConfigs.Parameters.AddWithValue("@param_val_2", merchantIdToValidate);
                     MySqlDataReader rs = cmdForAppConfigs.ExecuteReader();
                     List<String> merchantIdsWithBocaEnabled = new List<string>();
-                    while(rs.Read())
-                    {
-                        merchantIdsWithBocaEnabled.Add(rs["merchant_id"] + "");                        
-                    }
-                    rs.Close();
-                    for (int merchantIndex = 0; merchantIndex < merchantIdsWithBocaEnabled.Count; merchantIndex++)
-                    {
-                        String sqlForGroupPrintConfig = "select ac.merchant_id, m.display_name, ac.name, ac.value from application_config ac join merchant m on ac.merchant_id = m.merchant_id where ac.application_id = @param_val_1 and ac.name = 'groupItemPrinting' and ac.value = 'true' and ac.merchant_id = @param_val_2";
-                        //validate that each one DOESNT have groupItemPrinting set to true
-                        MySqlCommand cmdForGroupPrintingConfig = new MySqlCommand(sqlForGroupPrintConfig, connection);
-                        cmdForGroupPrintingConfig.Parameters.AddWithValue("@param_val_1", posApplicationIds[index]);
-                        cmdForGroupPrintingConfig.Parameters.AddWithValue("@param_val_2", merchantIdsWithBocaEnabled[merchantIndex]);
-                        
-                        MySqlDataReader badResults = cmdForGroupPrintingConfig.ExecuteReader();
-                        
-                        if(badResults.Read())
-                        {
-                            outputBox.AppendText("For Merchant ID " + merchantIdsWithBocaEnabled[merchantIndex] + "change application config values in application_config table for sendTicketsToBoca to true and groupItemPrinting to false!" + Environment.NewLine);
-                            anyBadResults = true;
-                        }
 
-                        badResults.Close();
+                    bool hasSendToBocaConfigSetToTrue = false;
+
+                   if(rs.Read())
+                   {
+                       hasSendToBocaConfigSetToTrue = true;
+                   }
+                    rs.Close();
+
+                    String sqlForGroupPrintConfig = "select ac.merchant_id, m.display_name, ac.name, ac.value from application_config ac join merchant m on ac.merchant_id = m.merchant_id where ac.application_id = @param_val_1 and ac.name = 'groupItemPrinting' and ac.value = 'true' and ac.merchant_id = @param_val_2";
+                    //validate that each one DOESNT have groupItemPrinting set to true
+                    MySqlCommand cmdForGroupPrintingConfig = new MySqlCommand(sqlForGroupPrintConfig, connection);
+                    cmdForGroupPrintingConfig.Parameters.AddWithValue("@param_val_1", posApplicationIds[index]);
+                    cmdForGroupPrintingConfig.Parameters.AddWithValue("@param_val_2", merchantIdToValidate);
+                        
+                    MySqlDataReader badResults = cmdForGroupPrintingConfig.ExecuteReader();
+
+                    if (badResults.Read() && hasSendToBocaConfigSetToTrue)
+                    {
+                        outputBox.AppendText("For Merchant ID " + merchantIdToValidate + "change application config values in application_config table for sendTicketsToBoca to true and groupItemPrinting to false!" + Environment.NewLine);
+                        anyBadResults = true;
                     }
+
+                    badResults.Close();
                 }
 
                 if(!anyBadResults)
